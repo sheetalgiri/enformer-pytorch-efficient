@@ -1,15 +1,14 @@
 from setuptools import setup, find_packages
 
 setup(
-  name = 'enformer-pytorch',
+  name = 'enformer-pytorch-efficient',
   packages = find_packages(exclude=[]),
   include_package_data = True,
-  version = '0.4.5',
+  version = '0.0',
   license='MIT',
-  description = 'Enformer - Pytorch',
-  author = 'Phil Wang',
-  author_email = 'lucidrains@gmail.com',
-  url = 'https://github.com/lucidrains/enformer-pytorch',
+  description = 'Enformer - Pytorch- Efficient, Fork of enformer-pytorch from github@lucidrains',
+  author = 'SG',
+  url = 'https://github.com/lucidrains/enformer-pytorch-efficient',
   keywords = [
     'artificial intelligence',
     'transformer',
@@ -23,6 +22,7 @@ setup(
     'pyfaidx',
     'pyyaml',
     'transformers',
+    'performer-pytorch'
   ],
   classifiers=[
     'Development Status :: 4 - Beta',
