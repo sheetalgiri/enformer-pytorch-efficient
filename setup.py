@@ -18,6 +18,7 @@ setup(
     'einops>=0.3',
     'numpy',
     'torch>=1.6',
+    'torchmetrics',
     'polars',
     'pyfaidx',
     'pyyaml',

@@ -1,7 +1,7 @@
 import torch
 from enformer_pytorch import Enformer
 
-enformer = Enformer.from_pretrained('EleutherAI/enformer-preview').cuda()
+enformer = Enformer.from_pretrained('EleutherAI/enformer-official-rough').cuda()
 enformer.eval()
 
 data = torch.load('./data/test-sample.pt')

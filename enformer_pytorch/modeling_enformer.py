@@ -81,7 +81,7 @@ def get_positional_features_gamma(positions, features, seq_len, stddev = None, s
     rate = mean / stddev ** 2
     probabilities = gamma_pdf(positions.float().abs()[..., None], concentration, rate)
     probabilities = probabilities + eps
-    outputs = probabilities / torch.amax(probabilities)
+    outputs = probabilities / torch.amax(probabilities, dim = -1, keepdim = True)
     return outputs
 
 def get_positional_embed(seq_len, feature_size, device):
@@ -136,7 +136,7 @@ class AttentionPool(nn.Module):
         super().__init__()
         self.pool_size = pool_size
         self.pool_fn = Rearrange('b d (n p) -> b d n p', p = 2)
-        self.to_attn_logits = nn.Parameter(torch.eye(dim))
+        self.to_attn_logits = nn.Conv2d(dim, dim, 1, bias = False)
 
     def forward(self, x):
         b, _, n = x.shape
@@ -148,15 +148,15 @@ class AttentionPool(nn.Module):
             mask = torch.zeros((b, 1, n), dtype = torch.bool, device = x.device)
             mask = F.pad(mask, (0, remainder), value = True)
 
-        attn_logits = einsum('b d n, d e -> b e n', x, self.to_attn_logits)
         x = self.pool_fn(x)
-        logits = self.pool_fn(attn_logits)
+        logits = self.to_attn_logits(x)
 
         if needs_padding:
             mask_value = -torch.finfo(logits.dtype).max
             logits = logits.masked_fill(self.pool_fn(mask), mask_value)
 
         attn = logits.softmax(dim = -1)
+
         return (x * attn).sum(dim = -1)
 
 class TargetLengthCrop(nn.Module):
@@ -174,6 +174,10 @@ class TargetLengthCrop(nn.Module):
             raise ValueError(f'sequence length {seq_len} is less than target length {target_len}')
 
         trim = (target_len - seq_len) // 2
+
+        if trim == 0:
+            return x
+
         return x[:, -trim:trim]
 
 def ConvBlock(dim, dim_out = None, kernel_size = 1):
@@ -310,7 +314,6 @@ class Enformer(PreTrainedModel):
         # create stem
 
         self.stem = nn.Sequential(
-            Rearrange('b n d -> b d n'),
             nn.Conv1d(4, half_dim, 15, padding = 7),
             Residual(conv_block_klass(half_dim)),
             AttentionPool(half_dim, pool_size = 2)
@@ -359,10 +362,7 @@ class Enformer(PreTrainedModel):
                 ))
             ))
 
-        self.transformer = nn.Sequential(
-            Rearrange('b d n -> b n d'),
-            *transformer
-        )
+        self.transformer = nn.Sequential(*transformer)
 
         # target cropping
 
@@ -382,8 +382,10 @@ class Enformer(PreTrainedModel):
         # create trunk sequential module
 
         self._trunk = nn.Sequential(
+            Rearrange('b n d -> b d n'),
             self.stem,
             self.conv_tower,
+            Rearrange('b d n -> b n d'),
             self.transformer,
             self.crop_final,
             self.final_pointwise
@@ -418,14 +420,11 @@ class Enformer(PreTrainedModel):
         return self._heads
 
     def trunk_checkpointed(self, x):
+        x = rearrange(x, 'b n d -> b d n')
         x = self.stem(x)
         x = self.conv_tower(x)
-        x = self.transformer[0](x)
-
-        # todo (move the rearrange out of self.transformers sequential module, and transfer all weights to new module rearrangement, directly checkpoint on self.transformers)
-        transformer_blocks = self.transformer[1:]
-        x = checkpoint_sequential(nn.Sequential(*transformer_blocks), len(transformer_blocks), x)
-
+        x = rearrange(x, 'b d n -> b n d')
+        x = checkpoint_sequential(self.transformer, len(self.transformer), x)
         x = self.crop_final(x)
         x = self.final_pointwise(x)
         return x
