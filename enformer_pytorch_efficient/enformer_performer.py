@@ -2,15 +2,19 @@ from torch import nn
 from einops.layers.torch import Rearrange
 
 from enformer_pytorch import Enformer, Residual
+from enformer_pytorch.config_enformer import EnformerConfig
 from performer_pytorch import SelfAttention
 
 class EnformerPerformer(Enformer):
+    def from_hparams(**kwargs):
+        return EnformerPerformer(EnformerConfig(**kwargs))
+
     def __init__(self, config):
-        super(Enformer, self, config).__init__()
+        super().__init__(config)
         # transformer
-        self.transformer = []
+        transformer = []
         for _ in range(config.depth):
-            self.transformer.append(nn.Sequential(
+            transformer.append(nn.Sequential(
                 Residual(nn.Sequential(
                     nn.LayerNorm(config.dim),
                     SelfAttention(
@@ -33,5 +37,13 @@ class EnformerPerformer(Enformer):
 
         self.transformer = nn.Sequential(
             Rearrange('b d n -> b n d'),
-            *self.transformer
+            *transformer
+        )
+
+        self._trunk = nn.Sequential(
+            self.stem,
+            self.conv_tower,
+            self.transformer,
+            self.crop_final,
+            self.final_pointwise
         )
