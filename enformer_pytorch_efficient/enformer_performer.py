@@ -35,14 +35,13 @@ class EnformerPerformer(Enformer):
                 ))
             ))
 
-        self.transformer = nn.Sequential(
-            Rearrange('b d n -> b n d'),
-            *transformer
-        )
+        self.transformer = nn.Sequential(*transformer)
 
         self._trunk = nn.Sequential(
+            Rearrange('b n d -> b d n'),
             self.stem,
             self.conv_tower,
+            Rearrange('b d n -> b n d'),
             self.transformer,
             self.crop_final,
             self.final_pointwise
